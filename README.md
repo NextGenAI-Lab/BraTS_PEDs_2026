@@ -54,3 +54,12 @@ Track 2 (ED three-way intersection): `inference/apply\_ed\_override.py`
 
 Post-processing (CC only): `inference/postprocess.py`
 
+## Environment Note
+This pipeline was developed and tested using a custom Conda/venv 
+environment on an A100 40GB GPU (HPC). Key dependencies:
+- nnU-Net v2 (pip install nnunetv2)
+- MedNeXt (install from https://github.com/MIC-DKFZ/MedNeXt)
+- Python 3.12
+
+Full environment reproduction via the challenge's Docker container 
+is recommended for inference.
