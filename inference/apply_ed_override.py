@@ -1,4 +1,4 @@
-# /workspace/BRATS/docker_build/scripts/apply_ed_override.py
+# apply_ed_override.py
 import numpy as np
 import nibabel as nib
 

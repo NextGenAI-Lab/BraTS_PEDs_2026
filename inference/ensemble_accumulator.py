@@ -1,4 +1,4 @@
-# /workspace/BRATS/docker_build/scripts/ensemble_accumulator.py
+# ensemble_accumulator.py
 
 import os
 import numpy as np

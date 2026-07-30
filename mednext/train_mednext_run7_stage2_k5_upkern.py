@@ -17,10 +17,6 @@ from mednext_common import (
 )
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
-RUN_DIR     = "/workspace/BRATS/run_7"
-IMAGES_DIR  = "/workspace/BRATS/run_2/nnunet_raw/Dataset001_BraTSPEDs/imagesTr"
-LABELS_DIR  = "/workspace/BRATS/run_2/nnunet_raw/Dataset001_BraTSPEDs/labelsTr"
-SPLITS_FILE = "/workspace/BRATS/scripts/analysis/splits_final_stratified.json"
 
 TAG = "stage2_k5_upkern"
 
@@ -58,8 +54,8 @@ def build_k5_model(device):
     ).to(device)
 
 
-def init_from_upkern(fold, device, log):
-    stage1_dir = Path(RUN_DIR) / f"fold_{fold}" / "stage1_k3"
+def init_from_upkern(fold, run_dir, device, log):
+    stage1_dir = Path(run_dir) / f"fold_{fold}" / "stage1_k3"
     seed_path  = stage1_dir / "checkpoint_best.pth"
     if not seed_path.exists():
         raise FileNotFoundError(f"Stage-1 seed not found: {seed_path}")
@@ -78,7 +74,7 @@ def init_from_upkern(fold, device, log):
 
 def train(args):
     fold = args.fold
-    log, fold_dir = setup_logging(fold, RUN_DIR, TAG)
+    log, fold_dir = setup_logging(fold, args.run_dir, TAG)
 
     log.info("=" * 70)
     log.info(f"run_7_mednext | Stage 2 (kernel=5 UpKern) | Fold {fold}")
@@ -87,12 +83,12 @@ def train(args):
     log.info(f"ED is gating-free — fires on fed>ed_ref regardless of mean")
     log.info("=" * 70)
 
-    train_cases, val_cases = load_splits(SPLITS_FILE, fold)
+    train_cases, val_cases = load_splits(args.splits_file, fold)
     log.info(f"Fold {fold}: Train={len(train_cases)} Val={len(val_cases)}")
 
-    train_ds = BraTSDataset(train_cases, IMAGES_DIR, LABELS_DIR, PATCH_SIZE,
+    train_ds = BraTSDataset(train_cases, args.images_dir, args.labels_dir, PATCH_SIZE,
                              is_train=True, oversample=True)
-    val_ds   = BraTSDataset(val_cases,   IMAGES_DIR, LABELS_DIR, PATCH_SIZE,
+    val_ds   = BraTSDataset(val_cases,   args.images_dir, args.labels_dir, PATCH_SIZE,
                              is_train=True, oversample=False)
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,
                                num_workers=NUM_WORKERS, pin_memory=True,
@@ -143,7 +139,7 @@ def train(args):
             args.resume = False
 
     if not args.resume:
-        model = init_from_upkern(fold, device, log)
+        model = init_from_upkern(fold, args.run_dir, device, log)
         with torch.no_grad():
             dummy = torch.zeros(1, IN_CHANNELS, *PATCH_SIZE, device=device)
             dummy_out = model(dummy)
@@ -251,7 +247,7 @@ def train(args):
         if full_val_gate:
             log.info(f"  >> FullVal gate (fmean={fmean:.4f} > {snap.fast_best - FULL_VAL_MARGIN:.4f})")
             snap.last_full_val_epoch = epoch
-            mpc         = run_full_val(model, val_cases, IMAGES_DIR, LABELS_DIR,
+            mpc         = run_full_val(model, val_cases, args.images_dir, args.labels_dir,
                                        PATCH_SIZE, device)
             full_mean_v = float(np.mean(mpc))
             et, net, cc, ed = mpc
@@ -301,5 +297,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--fold", type=int, required=True)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--run_dir", required=True, help="Directory to save run logs and checkpoints")
+    parser.add_argument("--images_dir", required=True, help="Directory with training images")
+    parser.add_argument("--labels_dir", required=True, help="Directory with training labels")
+    parser.add_argument("--splits_file", required=True, help="Path to splits_final_stratified.json")
     args = parser.parse_args()
     train(args)

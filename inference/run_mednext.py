@@ -4,6 +4,8 @@
 import sys
 import re
 import os
+import argparse
+import logging
 from pathlib import Path
 
 import nibabel as nib
@@ -13,13 +15,23 @@ from monai.inferers import sliding_window_inference
 from nnunet_mednext import create_mednext_v1
 
 from model_registry import (
-    MEDNEXT_SNAP058, MEDNEXT_MODEL_ID, MEDNEXT_KERNEL,
+    MEDNEXT_MODEL_ID, MEDNEXT_KERNEL,
     MEDNEXT_IN_CH, MEDNEXT_OUT_CH, MEDNEXT_PATCH, MEDNEXT_OVERLAP
 )
 
 SW_BATCH = 4  # reduce if OOM, increase if VRAM allows
 
 CASE_RE = re.compile(r"(BraTS-PED-\d{5}-\d{3})")
+
+
+def setup_logging(log_path: Path):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
+    )
+    return logging.getLogger(__name__)
 
 
 def normalize(image):
@@ -52,16 +64,17 @@ def discover_cases(images_dir):
     return sorted(cases)
 
 
-def predict_mednext(ckpt_path, images_dir, output_dir, device=None, sw_batch=SW_BATCH):
+def predict_mednext(ckpt_path, images_dir, output_dir, device=None, sw_batch=SW_BATCH, log=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
+    
+    if log: log.info(f"Device: {device}")
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     images_dir = Path(images_dir)
 
-    print(f"Loading: {ckpt_path}")
+    if log: log.info(f"Loading: {ckpt_path}")
     ckpt  = torch.load(str(ckpt_path), map_location=device, weights_only=False)
     model = build_model(device)
     model.load_state_dict(ckpt["model"])
@@ -75,13 +88,13 @@ def predict_mednext(ckpt_path, images_dir, output_dir, device=None, sw_batch=SW_
         return final_head(model(x))
 
     cases = discover_cases(images_dir)
-    print(f"Cases found: {len(cases)}")
+    if log: log.info(f"Cases found: {len(cases)}")
 
     with torch.no_grad():
         for i, cid in enumerate(cases, 1):
             out_path = output_dir / f"{cid}.nii.gz"
             if out_path.exists():
-                print(f"  [SKIP] {cid} already done")
+                if log: log.info(f"  [SKIP] {cid} already done")
                 continue
 
             mods    = []
@@ -105,22 +118,25 @@ def predict_mednext(ckpt_path, images_dir, output_dir, device=None, sw_batch=SW_
                 str(out_path)
             )
             if i % 10 == 0 or i == len(cases):
-                print(f"  {i}/{len(cases)}")
+                if log: log.info(f"  {i}/{len(cases)}")
 
     del model
     torch.cuda.empty_cache()
-    print(f"Done -> {output_dir}")
+    if log: log.info(f"Done -> {output_dir}")
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt",     default=MEDNEXT_SNAP058)
-    parser.add_argument("--input",    required=True)
-    parser.add_argument("--output",   required=True)
-    parser.add_argument("--sw_batch", type=int, default=SW_BATCH)
-    parser.add_argument("--device",   default="cuda")
+    parser = argparse.ArgumentParser(description="Run MedNeXt inference.")
+    parser.add_argument("--ckpt",     required=True, help="Path to checkpoint")
+    parser.add_argument("--input",    required=True, help="Input directory")
+    parser.add_argument("--output",   required=True, help="Output directory")
+    parser.add_argument("--sw_batch", type=int, default=SW_BATCH, help="Sliding window batch size")
+    parser.add_argument("--device",   default="cuda", help="Device (e.g. cuda, cpu)")
+    parser.add_argument("--log_dir",  default="logs", help="Directory to save logs")
     args = parser.parse_args()
+
+    log_dir = Path(args.log_dir)
+    log = setup_logging(log_dir / "run_mednext.log")
 
     predict_mednext(
         ckpt_path  = args.ckpt,
@@ -128,4 +144,5 @@ if __name__ == "__main__":
         output_dir = args.output,
         device     = torch.device(args.device),
         sw_batch   = args.sw_batch,
+        log        = log
     )

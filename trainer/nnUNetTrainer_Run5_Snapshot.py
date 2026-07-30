@@ -1,6 +1,6 @@
 """
-nnUNetTrainer_Run5_OversampleSnapshot.py
-nnUNet default + 500 epochs + LR 0.02 + ET/CC/ED oversampling + fixed snapshot logic.
+nnUNetTrainer_Run5_Snapshot.py
+nnUNet default + 500 epochs + LR 0.02 + snapshot logic after ep300.
 """
 
 import os
@@ -9,7 +9,7 @@ import torch
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 
 
-class nnUNetTrainer_Run5_OversampleSnapshot(nnUNetTrainer):
+class nnUNetTrainer_Run5_Snapshot(nnUNetTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int,
                  dataset_json: dict,
@@ -26,37 +26,9 @@ class nnUNetTrainer_Run5_OversampleSnapshot(nnUNetTrainer):
         self._old_best_ema    = -1.0
 
         self.print_to_log_file(
-            "Run5_OversampleSnapshot: 500 epochs LR=0.02 ET/CC/ED oversample | "
+            "nnUNetTrainer_Run5_Snapshot: 500 epochs LR=0.02 | "
             "snapshot after ep300 when ET or CC beats ET/CC at best-EMA epoch"
         )
-
-    def get_dataloaders(self):
-        tr_loader, val_loader = super().get_dataloaders()
-        self._boost_etcced_locations(tr_loader)
-        return tr_loader, val_loader
-
-    def _boost_etcced_locations(self, dataloader):
-        try:
-            if not hasattr(dataloader, 'data') or dataloader.data is None:
-                self.print_to_log_file("Oversample: no dataloader.data, skipping")
-                return
-            modified = 0
-            for case_id, case_data in dataloader.data.items():
-                if 'class_locations' not in case_data:
-                    continue
-                for label in [1, 3, 4]:  # ET=1, CC=3, ED=4
-                    locs = case_data['class_locations'].get(label, None)
-                    if locs is None or len(locs) == 0:
-                        continue
-                    if len(locs) > 500:
-                        locs = locs[np.random.choice(len(locs), 500, replace=False)]
-                    case_data['class_locations'][label] = np.tile(locs, (3, 1))
-                modified += 1
-            self.print_to_log_file(f"Oversample: boosted ET/CC/ED for {modified} cases")
-        except Exception as e:
-            self.print_to_log_file(f"Oversample ERROR: {e}")
-            import traceback
-            self.print_to_log_file(traceback.format_exc())
 
     def _get_smoothed_et_cc(self):
         try:
@@ -81,7 +53,6 @@ class nnUNetTrainer_Run5_OversampleSnapshot(nnUNetTrainer):
             if current_ema is None or self._best_ema is None:
                 return
 
-            # Detect new best EMA — record ET/CC at this epoch as reference
             if self._best_ema != self._old_best_ema:
                 dice_now = self.logger.get_value('dice_per_class_or_region', step=-1)
                 if dice_now is not None and len(dice_now) >= 3:

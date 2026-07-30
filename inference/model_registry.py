@@ -1,10 +1,8 @@
-# /workspace/BRATS/docker_build/scripts/model_registry.py
+# inference/model_registry.py
 
-NNUNET_RESULTS = "/workspace/BRATS/docker_build/models/nnunet_results"
-MEDNEXT_DIR    = "/workspace/BRATS/docker_build/models/mednext"
-
-RUN5 = f"{NNUNET_RESULTS}/Dataset001_BraTSPEDs/nnUNetTrainer_Run5_OversampleSnapshot__nnUNetPlans__3d_fullres"
-RUN3 = f"{NNUNET_RESULTS}/Dataset001_BraTSPEDs/nnUNetTrainer_C3_OversampleETCC__nnUNetPlans__3d_fullres"
+# These are relative references used when constructing full paths dynamically
+RUN5 = "nnUNetTrainer_Run5_Snapshot__nnUNetPlans__3d_fullres"
+RUN3 = "nnUNetTrainer_C3__nnUNetPlans__3d_fullres"
 
 # 10 inference runs total:
 # idx 0-7: nnUNet ensemble (Run5)
@@ -25,7 +23,7 @@ MODELS = [
     (8, 4, "checkpoint_best.pth", RUN3, True),
 ]
 
-MEDNEXT_SNAP058 = f"{MEDNEXT_DIR}/checkpoint_snap058_ep0193_meanfv0.6546_et0.6663_cc0.6490_ed0.5757.pth"
+# (Removed hardcoded MEDNEXT_SNAP058 to be passed dynamically)
 
 # WEIGHTS: 9 columns (idx 0-7 = nnUNet ensemble, idx 8 = ED-intersection result)
 # ED-intersection (col 8) = (snap058==4) & (run3==4), gets full weight in ED row only
@@ -53,12 +51,15 @@ MEDNEXT_OVERLAP   = 0.25
 
 if __name__ == "__main__":
     import os
+    import argparse
+    parser = argparse.ArgumentParser(description="Verify model configurations.")
+    parser.add_argument("--nnunet_results", required=True, help="Path to nnUNet_results directory")
+    args = parser.parse_args()
+    
     print("=== Verifying model paths ===")
     for idx, fold, ckpt, trainer_path, _ in MODELS:
-        p = f"{trainer_path}/fold_{fold}/{ckpt}"
+        actual_trainer_path = os.path.join(args.nnunet_results, f"Dataset{DATASET_ID}_BraTSPEDs", trainer_path)
+        p = f"{actual_trainer_path}/fold_{fold}/{ckpt}"
         status = "OK" if os.path.exists(p) else "MISSING"
         print(f"  [{status}] idx={idx} fold={fold} {ckpt}")
-    p = MEDNEXT_SNAP058
-    status = "OK" if os.path.exists(p) else "MISSING"
-    print(f"  [{status}] MedNeXt snap058")
-    print("=== Done ===")
+    print("=== Done ===")

@@ -1,4 +1,4 @@
-# /workspace/BRATS/docker_build/scripts/maskify.py
+# maskify.py
 import os
 import numpy as np
 import nibabel as nib
