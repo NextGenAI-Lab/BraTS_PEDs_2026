@@ -34,7 +34,7 @@ Because specific pediatric tumor components (like ET and CC) are underrepresente
 
 ### 2. Diverse Model Training
 The framework trains two distinct architectures to maximize functional diversity:
-*   **Custom nnU-Net Ensembles (`Run5_Snapshot`):** We extended the standard nnU-Net v2 trainer to capture multiple "snapshots" during a single extended training run (500 epochs). Snapshots are triggered dynamically when a model reaches new peaks in EMA validation dice, providing a rich pool of checkpoints without retraining from scratch.
+*   **Custom nnU-Net Ensembles (`Run5_Snapshot`):** We extended the standard nnU-Net v2 trainer to capture multiple "snapshots" during a single extended training run (500 epochs). Snapshots are triggered dynamically when a model achieves new peaks in regional performance (specifically ET or CC) while maintaining high overall EMA validation dice, providing a rich pool of checkpoints without retraining from scratch.
 *   **MedNeXt with UpKern (`run7`):** To capture a larger spatial context, we utilize MedNeXt via a strict two-stage protocol: Stage 1 trains a kernel=3 seed, and Stage 2 expands to a kernel=5 architecture using UpKern initialization.
 
 ### 3. Generalized Region-Specific Optimization
@@ -95,8 +95,8 @@ Analyzes raw tumor volumes and creates a smart, balanced cross-validation split 
 ```bash
 python preprocessing/create_folds.py \
     --data_dirs /path/to/raw/BraTS_PEDs_Training \
-    --output_dir /path/to/save/splits \
-    --num_folds 5
+    --out /path/to/save/splits \
+    --n_folds 5
 ```
 
 ### 2. Prepare nnU-Net Raw Format
@@ -187,7 +187,7 @@ python inference/run_pipeline.py \
     --input /path/to/unseen/test/images \
     --output /path/to/final_segmentations \
     --nnunet_results /path/to/workspace/nnUNet_results \
-    --mednext_ckpts /workspace/run_7/fold_0/stage2_k5_upkern/checkpoint_best.pth /workspace/run_7/fold_1/stage2_k5_upkern/checkpoint_best.pth \
+    --mednext_ckpts /workspace/run_7/fold_0/stage2_k5_upkern/checkpoint_best.pth /workspace/run_7/fold_2/stage2_k5_upkern/checkpoint_best.pth \
     --scratch_base /tmp/brats_scratch \
     --nnunet_bin nnUNetv2_predict
 ```
